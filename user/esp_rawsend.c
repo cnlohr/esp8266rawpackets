@@ -1,7 +1,7 @@
 #include "esp_rawsend.h"
 
-//We need to get our hands on
-
+//We need to get our hands on this pointer, but I don't know it's absolute location
+//So, we wait for a TX packet callback and steal it from there.
 static void * pxpkt = 0;  //This is the pointer to the structure that let's us raw send.
 
 static void txcb(uint8_t *buf, uint16 reason)
