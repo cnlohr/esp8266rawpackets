@@ -1,0 +1,302 @@
+https://github.com/SuperHouse/esp-open-rtos/issues/4
+
+Consider: eagle_lwip_getif
+
+A second step would be writing a function in C that replicates the ieee80211_send_probereq,
+basically creating a management frame using ieee80211_getmgtframe, configuring it and finally outputting the frame via ieee80211_mgmt_output which internally calls ieee80211_raw_output which in my opinion is replaced by ppTxPkt in ESP, so maybe the signature is similar. But I didn't go down that road so much. Help would be appreciated. 
+
+http://www.esp8266.com/viewtopic.php?f=6&t=3481&p=19857&hilit=ppTxPkt#p19857
+
+
+
+
+
+
+//ieee80211_output_pbuf here:
+https://github.com/kadamski/esp-lwip/blob/esp8266-1.4.1/our/eagle_lwip_if.c
+
+
+
+
+Also..
+    The very answer to your question.
+    With ieee80211_output_pbuf can be sent only ethernet packets. Campaign you need to pick ieee80211_send_mgmt, but already there is a dark forest. 
+
+Dispatch is ppTxPkt (void * x), where x + 0x20 some pointer ...
+ieee80211_send_mgmt inserts poppies - Net handles wifi frame in the frame.
+
+
+
+
+
+https://github.com/angelovAlex/esp-blobs/tree/c8d4d39b9137c5c32a464fee223dd71ec686f4d6
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Some really excessive code:
+
+//I have no found this function is useless.
+//struct ieee80211_node * eagle_lwip_getif(int id); //Always make id = 1;
+
+void * pxpkt = 0;
+
+static void txcb(uint8_t *buf, uint16 reason)
+{
+	pxpkt = buf;
+	return;
+	char ct[16];
+	int i = 0;
+	ets_sprintf( ct, "<%p %d --> NODE:%p\n", buf, reason, eagle_lwip_getif(1) );
+	uart0_sendStr( ct );
+	for( i = 0; i <100; i++ )
+	{
+		ets_sprintf( ct, "%02x ", buf[i] );
+		uart0_sendStr( ct );
+	}
+	uart0_sendStr( "\n" );
+
+	uint8_t * innerbuf = ((uint32_t*)buf)[1];
+	ets_sprintf( ct, "\nInner [1]: %p\n", innerbuf );
+	uart0_sendStr( ct );
+
+	for( i = 0; i <100; i++ )
+	{
+		ets_sprintf( ct, "%02x ", innerbuf[i] );
+		uart0_sendStr( ct );
+	}
+
+	innerbuf = ((uint32_t*)buf)[4];
+	ets_sprintf( ct, "\nInner [4]: %p\n", innerbuf );
+	uart0_sendStr( ct );
+	for( i = 0; i <100; i++ )
+	{
+		ets_sprintf( ct, "%02x ", innerbuf[i] );
+		uart0_sendStr( ct );
+	}
+
+
+	innerbuf = ((uint32_t*)buf)[8];
+	ets_sprintf( ct, "\nInner [8]: %p\n", innerbuf ); //nothing else here...
+	uart0_sendStr( ct );
+	for( i = 0; i <100; i++ )
+	{
+		ets_sprintf( ct, "%02x ", innerbuf[i] );
+		uart0_sendStr( ct );
+	}
+
+	uint32_t * inner8next = innerbuf;
+	inner8next = inner8next[5];
+	ets_sprintf( ct, "\nInner [8][5]: %p\n", inner8next );  //Nothing more here.
+	uart0_sendStr( ct );
+	for( i = 0; i <100; i++ )
+	{
+		ets_sprintf( ct, "%02x ", ((uint8_t*)inner8next)[i] );
+		uart0_sendStr( ct );
+	}
+}
+
+
+//Timer event.
+static void 
+ myTimer(void *arg)
+{
+	int i;
+	uart0_sendStr(".");
+
+#if 0
+
+	uint32_t * pxt[512];
+	ets_memset( pxt, 0, sizeof( pxt ) );
+
+/*	struct A5Struct
+	{
+		uint8_t q0;
+		uint8_t q1;
+		uint8_t q2;
+		uint8_t q3;
+		uint8_t a0;
+		uint8_t q5;
+		uint8_t a3;
+		uint8_t q7;
+	} a5;
+
+	a5.a0 = 0x06; //??? (extui a0, a0, 0, 4)  where the last 2 are shift,mask
+	a5.a3 = 0x00; //??? (extui a3, a3, 4, 3)
+
+	/*
+		//a2 is a pointer.
+		//Make stack 16 bigger.
+		//Push  a0, a12 to stack.
+		uint8_t * a5 = ((uint8_t*)a2)[8];  (0x20)
+		uint32_t * a12 = a2;
+		uint8_t a3 = a5[6];
+		uint8_t a0 = a5[4];
+		a3 = (a3>>4)&0b111;
+		a0 = a0 & 0x0f;
+		if( a0 == 0 || a0 == 3 ) { a2 = 2; }
+		else if( a0 < 3 ) { a2 = 3; }
+		else if( a0 < 6 ) { a2 = 1; }
+		else { a2 = 0 }
+		if( a2 != a3 )
+		{
+			printf( "%s %u", "pp.c", 146 );
+		}
+
+		a2 = a12; (restore pointer)
+		fun_4024c82c();
+		
+	*/
+	//If exended a0 is 0, then, it will set a2 to 2 and jump to checker.
+	//If extended a0 == 3, then it will set a2 to 2, and go to checker.
+	//If extended a0 <  3, then it will set a2 to 3, and go to checker.
+	//a2 = 1;
+	//Then,
+	//If a0 < 6, then it will immediately go to checker.
+	//a2 = 0;
+	//Jump to checker.
+	//
+	//checker:
+//	pxt[8] = &a5; //???? (A5)
+
+/*	for( i = 0; i < 10; i++ )
+	{
+		pxt[i] = eagle_lwip_getif(0);;
+	}*/
+
+	struct myin4
+	{
+		uint32_t head;
+		uint8_t macto[6];
+		uint8_t macfrom[6];
+		uint8_t macfrom2[6]; //vas is stas
+		uint8_t payload[512];
+	};
+
+	struct aearly
+	{
+		uint32_t first;
+		uint8_t * in4addy;
+		uint32_t zero;
+		struct myin4 in4;
+	} ae;
+	ae.first = 0xc004d100; //??? MAGIC???
+	ae.in4addy = &ae.in4;
+	ae.zero = 0;
+	memset( &ae.in4, 0, sizeof( ae.in4 ) );
+	ae.in4.head = 0x8;
+	ae.in4.macto[0] = 0xff;ae.in4.macto[1] = 0xff;ae.in4.macto[2] = 0xff;ae.in4.macto[3] = 0xff;ae.in4.macto[4] = 0xff;ae.in4.macto[5] = 0xff;
+	ae.in4.macfrom[0] = 0x1a;ae.in4.macfrom[1] = 0xfe;ae.in4.macfrom[2] = 0x34;ae.in4.macfrom[3] = 0x99;ae.in4.macfrom[4] = 0x08;ae.in4.macfrom[5] = 0xa0;
+	ae.in4.macfrom2[0] = 0x1a;ae.in4.macfrom2[1] = 0xfe;ae.in4.macfrom2[2] = 0x34;ae.in4.macfrom2[3] = 0x99;ae.in4.macfrom2[4] = 0x08;ae.in4.macfrom2[5] = 0xa0;
+
+	struct ain8
+	{
+		uint32_t first, second, third, fourth, fifth;
+		uint32_t * sixth;
+		uint8_t buffer[100];
+	} ain8;
+
+	memset( &ain8, 0, sizeof( ain8 ) );
+
+	ain8.first   = 0x20110486; //??? magic!
+	ain8.second  = 0;
+	ain8.third   = 0x0003327f; //??? magic!
+	ain8.fourth  = 0xad011000; //??? magic!
+	ain8.fifth   = 0x14005bb0; //?? magic!
+	ain8.sixth   = 0x3ffe8214; //This is some constant firmly planted deep within libpp.a(trc.o)
+
+	pxt[0] = 0;
+	pxt[1] = 0x3ffef5a4; //&ae;  libpp.a(esf_buf.o)
+	pxt[2] = 0x3ffef5a4; //&ae;  libpp.a(esf_buf.o)
+	pxt[3] = 1;
+	pxt[4] = &ae.in4; //0x3ffef5b0; //&ae.in4;  libpp.a(esf_buf.o)
+	pxt[5] = 0x00350018; //magic!.
+	pxt[6] = 0;
+	pxt[7] = 0;
+	pxt[8] = 0x3ffefa30; //&ain8;
+	pxt[9] = 0;
+	pxt[10] = 0x3ffef6b0;//&ain10; (INVESTIGATE) libpp.a(esf_buf.o)
+	pxt[11] = 0x3ffef6b0;//&ain10; (INVESTIGATE) libpp.a(esf_buf.o)
+	pxt[12] = 1;
+	pxt[13] = 0x3ffef6bc; //INVESTIGATE libpp.a(esf_buf.o)
+	pxt[14] = 0;
+	pxt[15] = 0;
+	pxt[16] = 0;
+	pxt[17] = 0xf3fefa48; //Investigate libpp.a(esf_buf.o)
+	pxt[18] = 0;
+
+	//There may be more...
+
+
+#endif
+
+
+	if( pxpkt )
+	{
+		//control = 00 d1 34 c0 b0 f5 fe 3f 00 00 00 00
+		struct Ctrl{
+			uint8_t reserved;  //No idea
+			uint8_t channel:4; //This is a guess
+			uint8_t size_lsb:4;
+			uint8_t size_msb;  //This is almost always 192.
+			uint8_t code;
+		} * control = ((uint32_t*)pxpkt)[1];
+
+		char buffer[100];
+		ets_sprintf( buffer, "Res: %d Chan: %d Size: %d Code: %d // TXLen: %d\n", control->reserved, control->channel, control->size_lsb + (control->size_msb<<4), control->code, ((uint32_t*)pxpkt)[5]>>16 );
+		uart0_sendStr(buffer);
+
+
+		//This doesn't work, why?
+
+		int size = 100;  //Actual size of payload.
+		control->size_lsb = size&0x0f;
+		control->size_msb = size>>4;
+		((uint32_t*)pxpkt)[5] = (((uint32_t*)pxpkt)[5] & 0xff ) | ((size-24)<<16);
+	
+
+		ets_sprintf( buffer, "Res: %d Chan: %d Size: %d Code: %d // TXLen: %d\n", control->reserved, control->channel, control->size_lsb + (control->size_msb<<4), control->code, ((uint32_t*)pxpkt)[5]>>16 );
+		uart0_sendStr(buffer);
+
+
+//		char buffer[10];
+//		int i;
+/*		for( i = 0; i < 4; i++ )
+		{
+			ets_sprintf( buffer, "%02x ", control[i] );
+			uart0_sendStr(buffer);
+		}
+			//00 11 06 c0  = 127 bytes.
+			//   91 09 c0  = 183 bytes.
+			//00 d1 09 c0  = 187 bytes
+			//00 51 0a c0  = 195 bytes.
+*/
+
+//		uart0_sendStr( "\n" );
+//		control[2] = 0x34; //44decimal makes packets 0x51
+							//0x34 makes packets ??? 
+
+		uint8_t * packet = ((uint32_t*)pxpkt)[4];
+		memset( packet, 0, 200 );
+		packet[0] = 0xff; //0x80 = a beacon.
+		for( i = 0; i < 255; i++ )
+		{
+			packet[i+4] = i;
+		}
+		ppTxPkt( pxpkt );
+	}
+
+//	struct ieee80211_node * node = eagle_lwip_getif(0);
+//	ieee80211_send_nulldata( node );
+}
+
