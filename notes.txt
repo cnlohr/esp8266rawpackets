@@ -1,3 +1,23 @@
+Charles notes:
+
+	192.168.11.169 < default sender.
+	192.168.11.147 < other guy.
+
+
+additional notes:
+
+https://github.com/ernacktob/esp8266_wifi_raw
+^^ This guy wins.
+
+
+
+
+
+
+
+
+
+
 https://github.com/SuperHouse/esp-open-rtos/issues/4
 
 Consider: eagle_lwip_getif
