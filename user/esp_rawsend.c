@@ -119,6 +119,7 @@ void RawSendBuffer( uint8_t * buffer, int length )
 
 	int size = length;  //Actual size of payload.
 	if( size < 24 ) size = 24;
+
 	control->size_lsb = size&0x0f;
 	control->size_msb = size>>4;
 	((uint32_t*)pxpkt)[5] = (((uint32_t*)pxpkt)[5] & 0xff ) | ((size-24)<<16);

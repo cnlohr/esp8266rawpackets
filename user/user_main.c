@@ -120,6 +120,8 @@ static void ICACHE_FLASH_ATTR myTimer(void *arg)
 	static int waittik;
 	thistik++;
 
+	wifi_set_user_fixed_rate( 3, 12 );
+
 	if( thistik < waittik )
 	{
 		return;
@@ -154,6 +156,7 @@ static void ICACHE_FLASH_ATTR myTimer(void *arg)
 		//printf( "%d\n", debugccount );
 		//uart0_sendStr("k");
 		ets_strcpy( mypacket+30, "ESPEEDEE" );
+//		ets_strcpy( mypacket+30, "ESPEED00" );
 		id++;
 		mypacket[38] = id>>24;
 		mypacket[39] = id>>16;
