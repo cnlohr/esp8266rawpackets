@@ -3,19 +3,18 @@
 
 //From https://github.com/ernacktob/esp8266_wifi_raw
 extern void ICACHE_FLASH_ATTR ppEnqueueRxq(void *);
-static wifi_raw_recv_cb_fn wifi_mcb;
+wifi_raw_recv_cb_fn wifi_mcb;
 void ICACHE_FLASH_ATTR wifi_set_raw_recv_cb(wifi_raw_recv_cb_fn rx_fn)
 {
 	wifi_mcb = rx_fn;
 }
 
-void ICACHE_FLASH_ATTR aaEnqueueRxq(void * v)
+void aaEnqueueRxq(void * v)
 {
 	if (wifi_mcb)
-		wifi_mcb((struct RxPacket *)(((void **)v)[4]));
+		wifi_mcb((struct RxPacket *)( ((void **)v)[4]), v );
 	ppEnqueueRxq(v);
 }
-
 
 //I use a less evasive mechanism to send than the other packet thing.
 

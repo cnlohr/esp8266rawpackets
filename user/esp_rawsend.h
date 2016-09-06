@@ -39,7 +39,7 @@ struct RxPacket {
 	uint8 data[];
 };
 
-typedef void (*wifi_raw_recv_cb_fn)(struct RxPacket *);
+typedef void (*wifi_raw_recv_cb_fn)(struct RxPacket *, void ** v);
 void ICACHE_FLASH_ATTR wifi_set_raw_recv_cb(wifi_raw_recv_cb_fn rx_fn);
 
 //My stuff here.

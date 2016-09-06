@@ -4,7 +4,7 @@ include user.cfg
 
 
 CFLAGS += 
-SRCS += 	user/esp_rawsend.c
+SRCS += 	user/esp_rawsend.c user/customnmi.S
 
 % :
 	$(warning This is the empty rule. Something went wrong.)
