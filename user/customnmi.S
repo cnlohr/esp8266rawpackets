@@ -45,7 +45,19 @@ PreEmpt_USER_Vector:
 #endif
 
 
+	//TODO: Look at 0x3ff20c84, it flips between 0x2200 and 0x00
+	//TODO TODO: Look at 0x3ff210fc -> May be CCOUNT of incoming packet!!!
+	//0x3ff2001c contains a pointer to ram -> which starts with 0xc0068640 ... 0x3ffedcec ... 0x3ffec9f4 ... (0 or 0x80640640) (0 or pointer)
+	//0x3ff20014 contains a pointer to ram -> which starts with 0xc0074640 ... 0x3ffedcec ... 0x3ffec9f4 ... (0 or 0x80640640) (0 or pointer)
+	//0x3ffec9f4 ->	0x80640640
+	//0x3ffedcec -> 0x50154b26 (changes on RSSI), 0x97007107(or0), 0, 0x2c4288, 0xc07fcf5c (or 0xffffffff), 0x9fc25560, 0x40d823db
+	//
+	movi a2, 0x3ff20014
+	l32i a2, a2, 0 //Get pointer to memory structre
+	l32i a0, a2, 4 //Second word in structure
+	l32i a0, a0, 12
 
+	//Check to see if it's a speedy packet.
 
 
 	l32r a2, _lendmark

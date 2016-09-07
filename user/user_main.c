@@ -98,7 +98,7 @@ void  __attribute__ ((noinline)) rx_func( struct RxPacket * r, void ** v )
 	ets_memcpy( buffout, r, 12 ); //Header
 	ets_memcpy( buffout + 12, ((uint8_t*)r)+22, 6 ); //MAC From
 	ets_memcpy( buffout + 18, mypacket+10, 6 ); //My MAC
-	ets_memcpy( buffout + 24, ((uint8_t*)r)+42, 12 );
+	ets_memcpy( buffout + 24, ((uint8_t*)r)+42, 12 ); //ESPEEDEE?
 	buffout[36] = debugccount>>24;
 	buffout[37] = debugccount>>16;
 	buffout[38] = debugccount>>8;
