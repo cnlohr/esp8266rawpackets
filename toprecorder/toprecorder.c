@@ -46,29 +46,37 @@ int main(void)
         {
             die("recvfrom()");
         }
-		printf( "%d ", recv_len );
-		printf("%d.%d.%d.%d ",
-		  (si_other.sin_addr.s_addr&0xFF),
-		  ((si_other.sin_addr.s_addr&0xFF00)>>8),
-		  ((si_other.sin_addr.s_addr&0xFF0000)>>16),
-		  ((si_other.sin_addr.s_addr&0xFF000000)>>24));
 
-		int i, j, p = 0;
-		for( j = 0; j < 3; j++ )
+		int ipl = 0;
+		while( ipl < recv_len )
 		{
+			uint8_t * bptr = &buf[ipl];
+			ipl += 40;
+
+			//printf( "%d ", recv_len );
+			printf("%d.%d.%d.%d ",
+			  (si_other.sin_addr.s_addr&0xFF),
+			  ((si_other.sin_addr.s_addr&0xFF00)>>8),
+			  ((si_other.sin_addr.s_addr&0xFF0000)>>16),
+			  ((si_other.sin_addr.s_addr&0xFF000000)>>24));
+
+			int i, j, p = 0;
+			for( j = 0; j < 3; j++ )
+			{
+				for( i = 0; i < 6; i++ )
+				{
+					printf( "%02x", bptr[p++] );
+				}
+				printf(" ");
+			}
 			for( i = 0; i < 6; i++ )
 			{
-				printf( "%02x", buf[p++] );
+				printf( "%c", bptr[p++] );
 			}
-			printf(" ");
+			uint32_t id = ntohl( *((uint32_t*)&bptr[p]) ); p+=4;
+			uint32_t time = ( *((uint32_t*)&bptr[p]) ); p+=4;
+			printf( " %u %u\n", id, time );
 		}
-		for( i = 0; i < 6; i++ )
-		{
-			printf( "%c", buf[p++] );
-		}
-		uint32_t id = ntohl( *((uint32_t*)&buf[p]) ); p+=4;
-		uint32_t time = ( *((uint32_t*)&buf[p]) ); p+=4;
-		printf( " %u %u\n", id, time );
     }
     return 0;
 }

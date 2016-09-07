@@ -1,6 +1,9 @@
 #define USER_OVERRIDE
 //#define NMI_OVERRIDE
 
+#define USE_wDevTime //CCOUNT IS TRASH!!! USE THIS
+
+
 #ifdef USER_OVERRIDE
 .section .text
 
@@ -66,6 +69,10 @@ PreEmpt_USER_Vector:
 	l32i a3, a2, (12+24+16) //Where the time goes (make sure it's 0)
 	bnez a3, _skip_er
 
+#ifdef USE_wDevTime
+	movi a3, 0x3ff210fc
+	l32i a0, a3, 0
+#endif
 	s32i a0, a2, (12+24+16) //Write in A0 (Ccount) XXX TODO consider bumming 0x3ff210fc
 
 
@@ -143,7 +150,10 @@ replacement_NMI_vect:
 	.byte 0xd3
 	.byte 0x13
 //	_call0 _NMILevelVector
+
+#ifndef USE_wDevTime
 	rsr a0, ccount
+#endif
 	j PreEmpt_NMI_Vector
 //	ill
 
