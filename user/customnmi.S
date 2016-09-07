@@ -1,8 +1,10 @@
 #define USER_OVERRIDE
-#define NMI_OVERRIDE
+//#define NMI_OVERRIDE
 
 #ifdef USER_OVERRIDE
 .section .text
+
+.align 4
 
 _lendmark:
 	.long debugccount
@@ -18,15 +20,16 @@ PreEmpt_USER_Vector:
 //	movi a0, 3
 
 #if 1
-	addi a1, a1, -12
+	addi a1, a1, -16
 	s32i a2, a1, 4
 	s32i a3, a1, 8
+	s32i a4, a1, 12
 
 //    rsr     a2, intenable
 //    rsr     a3, interrupt
 //    and     a2, a2, a3  //Should also mask off 0x3fff but I'm not worried about it.
 
-	rsr a2, interrupt	//We are only looking at bit 0.
+	rsr a2, interrupt	//We are only looking at bit 0 and the wifi chip should be enabled.s
 
 	//Make sure it's a wifi interrupt.
 	bbci a2, 0, _skip_er  //INUM_WDEV_FIQ = 0
@@ -52,12 +55,18 @@ PreEmpt_USER_Vector:
 	//0x3ffec9f4 ->	0x80640640
 	//0x3ffedcec -> 0x50154b26 (changes on RSSI), 0x97007107(or0), 0, 0x2c4288, 0xc07fcf5c (or 0xffffffff), 0x9fc25560, 0x40d823db
 	//
-	movi a2, 0x3ff20014
+	movi a2, 0x3ff2001c
 	l32i a2, a2, 0 //Get pointer to memory structre
-	l32i a0, a2, 4 //Second word in structure
-	l32i a0, a0, 12
+	l32i a2, a2, 4 //Second word in structure
+	l32i a3, a2, (12+24) //12 is beginning of packet.
 
-	//Check to see if it's a speedy packet.
+	movi a4, 0x66826682
+	bne  a4, a3, _skip_er
+
+	l32i a3, a2, (12+24+16) //Where the time goes (make sure it's 0)
+	bnez a3, _skip_er
+
+	s32i a0, a2, (12+24+16) //Write in A0 (Ccount) XXX TODO consider bumming 0x3ff210fc
 
 
 	l32r a2, _lendmark
@@ -74,8 +83,9 @@ _skip_er:
 
 	l32i a2, a1, 4
 	l32i a3, a1, 8
+	l32i a4, a1, 12
 
-	addi a1, a1, 12
+	addi a1, a1, 16
 #endif
 	_call0 _UserExceptionVector_1
 

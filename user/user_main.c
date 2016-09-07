@@ -41,7 +41,7 @@ uint8_t mypacket[30+256] = {  //256 = max size of additional payload
 	0xff,0xff,0xff,0xff,0xff,0xff,
 	0x00, 0x00,  //Sequence number, cleared by espressif
 	0x82, 0x66,	 //"Mysterious OLPC stuff"
-	0x00, 0x00, 0x00, 0x00, //????
+	0x82, 0x66, 0x00, 0x00, //????
 	
 };
 
@@ -58,15 +58,18 @@ void udpserver_recv(void *arg, char *pusrdata, unsigned short len)
 	//Not used.
 }
 
-
+#define MAX_BUFFERS 10
+#define BUFFERSIZE 40
+uint8_t buffers[MAX_BUFFERS][BUFFERSIZE];
+uint8_t bufferinuse[MAX_BUFFERS];
 
 void  __attribute__ ((noinline)) rx_func( struct RxPacket * r, void ** v )
 {
 	debugccount3++;
-	if( r->data[24] != 0x82 || r->data[25] != 0x66 )
+	if( r->data[24] != 0x82 || r->data[25] != 0x66 || r->data[26] != 0x82 || r->data[27] != 0x66 )
 	{
 		return;
-	} 
+	}
 
 
 	//debugccount2++;
@@ -92,20 +95,47 @@ void  __attribute__ ((noinline)) rx_func( struct RxPacket * r, void ** v )
 */
 
 //	((uint32_t*)r)[1] = watchccount;
+	int b = 0;
+	for( b = 0; b < MAX_BUFFERS; b++ )
+	{
+		if( bufferinuse[b] == 0 ) break;
+	}
+	if( b == MAX_BUFFERS ) return;
+
+	uint8_t * buffout = buffers[b];
+	ets_memcpy( buffout, r, 6 ); //Header
+	ets_memcpy( buffout + 6, ((uint8_t*)r)+22, 6 ); //MAC From
+	ets_memcpy( buffout + 12, mypacket+10, 6 ); //My MAC
+	ets_memcpy( buffout + 18, ((uint8_t*)r)+42, 20 ); //ESPEED?
+	//Two bytes at end of buffer are reserved.
+
+	bufferinuse[b] = 1;
+
+//	buffout[36] = debugccount>>24;
+//	buffout[37] = debugccount>>16;
+//	buffout[38] = debugccount>>8;
+//	buffout[39] = debugccount>>0; No longer needed, put in place by interrupt.
+
+//	espconn_sent(pUdpServer, buffout, 40 ); //+8 = include header
 
 
-	uint8_t buffout[40];
-	ets_memcpy( buffout, r, 12 ); //Header
-	ets_memcpy( buffout + 12, ((uint8_t*)r)+22, 6 ); //MAC From
-	ets_memcpy( buffout + 18, mypacket+10, 6 ); //My MAC
-	ets_memcpy( buffout + 24, ((uint8_t*)r)+42, 12 ); //ESPEEDEE?
-	buffout[36] = debugccount>>24;
-	buffout[37] = debugccount>>16;
-	buffout[38] = debugccount>>8;
-	buffout[39] = debugccount>>0;
+	//Tricky: Can't call espconn_sent from inside here.
+}
 
-	espconn_sent(pUdpServer, buffout, 40 ); //+8 = include header
 
+static void ClearOutBuffers()
+{
+	uint8_t sendbuffer[ MAX_BUFFERS * BUFFERSIZE ];
+	uint8_t * bpl = sendbuffer;
+	int b = 0;
+	for( b = 0; b < MAX_BUFFERS; b++ )
+	{
+		if( !bufferinuse[b] ) continue;
+		ets_memcpy( bpl, buffers[b], BUFFERSIZE );
+		bpl += BUFFERSIZE;
+		bufferinuse[b] = 0;
+	}
+	espconn_sent(pUdpServer, sendbuffer, bpl-sendbuffer );
 }
 
 
@@ -130,6 +160,9 @@ static void ICACHE_FLASH_ATTR myTimer(void *arg)
 	{
 		return;
 	}
+
+	ClearOutBuffers();
+
 	thistik = 0;
 	waittik = rand()%10 + 40;
 
@@ -159,16 +192,18 @@ static void ICACHE_FLASH_ATTR myTimer(void *arg)
 		static int id;
 		//printf( "%d\n", debugccount );
 		//uart0_sendStr("k");
-		ets_strcpy( mypacket+30, "ESPEEDEE" );
-//		ets_strcpy( mypacket+30, "ESPEED00" );
+		ets_strcpy( mypacket+30, "ESPEED" );
 		id++;
-		mypacket[38] = id>>24;
-		mypacket[39] = id>>16;
-		mypacket[40] = id>>8;
-		mypacket[41] = id>>0;
-
+		mypacket[36] = id>>24;
+		mypacket[37] = id>>16;
+		mypacket[38] = id>>8;
+		mypacket[39] = id>>0;
+		mypacket[40] = 0;
+		mypacket[41] = 0;
+		mypacket[42] = 0;
+		mypacket[43] = 0;
 		
-		wifi_send_pkt_freedom( mypacket, 30 + 12, true) ;  //Currently only seems to send at 1MBit/s.  Need to figure out how to bump that up.
+		wifi_send_pkt_freedom( mypacket, 30 + 16, true) ;  //Currently only seems to send at 1MBit/s.  Need to figure out how to bump that up.
 
 /*
 	//Not doing this (yet)

@@ -46,7 +46,7 @@ int main(void)
         {
             die("recvfrom()");
         }
-
+		printf( "%d ", recv_len );
 		printf("%d.%d.%d.%d ",
 		  (si_other.sin_addr.s_addr&0xFF),
 		  ((si_other.sin_addr.s_addr&0xFF00)>>8),
@@ -54,7 +54,7 @@ int main(void)
 		  ((si_other.sin_addr.s_addr&0xFF000000)>>24));
 
 		int i, j, p = 0;
-		for( j = 0; j < 4; j++ )
+		for( j = 0; j < 3; j++ )
 		{
 			for( i = 0; i < 6; i++ )
 			{
@@ -62,12 +62,12 @@ int main(void)
 			}
 			printf(" ");
 		}
-		for( i = 0; i < 8; i++ )
+		for( i = 0; i < 6; i++ )
 		{
 			printf( "%c", buf[p++] );
 		}
 		uint32_t id = ntohl( *((uint32_t*)&buf[p]) ); p+=4;
-		uint32_t time = ntohl( *((uint32_t*)&buf[p]) ); p+=4;
+		uint32_t time = ( *((uint32_t*)&buf[p]) ); p+=4;
 		printf( " %u %u\n", id, time );
     }
     return 0;
