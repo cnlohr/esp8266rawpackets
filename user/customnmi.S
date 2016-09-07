@@ -6,6 +6,12 @@
 
 _lendmark:
 	.long debugccount
+_gpiomark_out:
+	.long 0x60000304 //Pin_set and 308 is pin_Clear
+_interrupt_cause_loc:
+	.long 0x3ff20c24
+_check_against_loc:
+	.long debugcontrol
 
 .global PreEmpt_USER_Vector
 PreEmpt_USER_Vector:
@@ -16,16 +22,41 @@ PreEmpt_USER_Vector:
 	s32i a2, a1, 4
 	s32i a3, a1, 8
 
-    rsr     a2, intenable
-    rsr     a3, interrupt
-    and     a2, a2, a3  //Should also mask off 0x3fff but I'm not worried about it.
+//    rsr     a2, intenable
+//    rsr     a3, interrupt
+//    and     a2, a2, a3  //Should also mask off 0x3fff but I'm not worried about it.
 
+	rsr a2, interrupt	//We are only looking at bit 0.
+
+	//Make sure it's a wifi interrupt.
 	bbci a2, 0, _skip_er  //INUM_WDEV_FIQ = 0
 
+	//Next, make sure it's an actual RX interrupt.
+	movi a2, 0x3ff20c20
+	l32i a3, a2, 0
+
+#ifdef DEBUG_BITMASK
+	movi a2, debugcontrol  //0x0100 looks good.
+	l32i a2, a2, 0
+	and a3, a2, a3
+	beqz a3, _skip_er
+#else	
+	bbci a3, 8, _skip_er
+#endif
+
+
+
+
+
 	l32r a2, _lendmark
-//	l32i a0, a2, 0
-//	addi a0, a0, 1
 	s32i a0, a2, 0
+	//Tick on the logic analyzer to test precision of interrupts.
+	movi a0, 4
+
+	//Twiddle GPIO
+	l32r a2, _gpiomark_out
+	s32i a0, a2, 0
+	s32i a0, a2, 4
 
 _skip_er:
 

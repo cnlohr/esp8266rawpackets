@@ -5,8 +5,8 @@
 #include <uart.h>
 #include "osapi.h"
 #include "espconn.h"
-#include "mystuff.h"
 #include "esp_rawsend.h"
+#include "esp82xxutil.h"
 
 #define procTaskPrio        0
 #define procTaskQueueLen    1
@@ -24,8 +24,6 @@ procTask(os_event_t *events)
 {
 	system_os_post(procTaskPrio, 0, 0 );
 
-	CSTick( 0 );
-
 	if( events->sig == 0 && events->par == 0 )
 	{
 		//Idle Event.
@@ -34,6 +32,7 @@ procTask(os_event_t *events)
 //	ets_delay_us( 20000 );
 //	printf( "-" );
 }
+
 uint8_t mypacket[30+256] = {  //256 = max size of additional payload
 	0x08, //Frame type, 0x80 = beacon, Tried data, but seems to have been filtered on RX side by other ESP
 	0x00, 0x00, 0x00, 
@@ -51,6 +50,7 @@ uint8_t mypacket[30+256] = {  //256 = max size of additional payload
 volatile uint32_t debugccount;
 volatile uint32_t debugccount2;
 volatile uint32_t debugccount3;
+volatile uint32_t debugcontrol;
 
 void udpserver_recv(void *arg, char *pusrdata, unsigned short len)
 {
@@ -120,6 +120,10 @@ static void ICACHE_FLASH_ATTR myTimer(void *arg)
 	static int waittik;
 	thistik++;
 
+
+	CSTick( 0 );
+
+
 	wifi_set_user_fixed_rate( 3, 12 );
 
 	if( thistik < waittik )
@@ -183,6 +187,8 @@ void user_init(void)
 	uart_init(BIT_RATE_115200, BIT_RATE_115200);
 	uart_init(BIT_RATE_115200, BIT_RATE_115200);
 
+	debugcontrol = 0xffffffff;
+
 	system_update_cpu_freq(160);
 
 	uart0_sendStr("testing...\r\n\033ctesting" ); //Clear screen
@@ -230,10 +236,10 @@ void user_init(void)
 	pUdpServer->proto.udp = (esp_udp *)os_zalloc(sizeof(esp_udp));
 	pUdpServer->proto.udp->local_port = 9999;
 	pUdpServer->proto.udp->remote_port = 9999;
-	pUdpServer->proto.udp->remote_ip[0] = 255;
-	pUdpServer->proto.udp->remote_ip[1] = 255;
-	pUdpServer->proto.udp->remote_ip[2] = 255;
-	pUdpServer->proto.udp->remote_ip[3] = 255;
+	pUdpServer->proto.udp->remote_ip[0] = 192;
+	pUdpServer->proto.udp->remote_ip[1] = 168;
+	pUdpServer->proto.udp->remote_ip[2] = 11;
+	pUdpServer->proto.udp->remote_ip[3] = 113;
 	espconn_regist_recvcb(pUdpServer, udpserver_recv);
 	if( espconn_create( pUdpServer ) )
 		while(1)
@@ -252,7 +258,11 @@ void user_init(void)
 	os_timer_setfn(&some_timer, (os_timer_func_t *)myTimer, NULL);
 	os_timer_arm(&some_timer, 1, 1); //The underlying API expects this to average out to 50ms.
  
-	system_os_post(procTaskPrio, 0, 0 );
+	//system_os_post(procTaskPrio, 0, 0 );
+
+	PIN_DIR_OUTPUT = _BV(2);
+	PIN_OUT_SET = _BV(2);
+	PIN_OUT_CLEAR = _BV(2);
 }
 
 //There is no code in this project that will cause reboots if interrupts are disabled.
