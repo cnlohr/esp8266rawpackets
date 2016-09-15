@@ -8,7 +8,7 @@
 
 using namespace std;
 
-#define NRNODES 4
+#define NRNODES 3
 
 struct DataEntry
 {
@@ -28,7 +28,7 @@ Node * NODES[NRNODES];
 
 
 void LoadEntries( const char * filename );
-
+int gFrame;
 int still_init = 0;
 const double MHz = 160; //160;
 const double SoL = 299792458;
@@ -45,24 +45,40 @@ int GetNodeId( string mac );
 #define KNOWN_NODE_3 1
 
 #if 1
-double ToFMatrix[4][4] = {
+double ToFMatrix[5][5] = {
+	0, 2.2, 2.2, 3.17, 1.5, 
+	2.2, 0, 3.17, 2.2, 1.5,
+	2.2, 3.17, 0, 2.2, 1.5,
+	3.17, 2.2, 2.2, 0, 1.5,
+	 1.5, 1.5, 1.5, 1.5, 0 };
+#else
+#if 0
+double ToFMatrix[5][5] = {
 	0, 2.2, 2.2, 3.17,
 	2.2, 0, 3.17, 2.2,
 	2.2, 3.17, 0, 2.2,
 	3.17, 2.2, 2.2, 0,
 	};
 #else
-double ToFMatrix[4][4] = {
+double ToFMatrix[5][5] = {
 	0, 0, 0, 0,
 	0, 0, 0, 0,
 	0, 0, 0, 0,
 	0, 0, 0, 0,
 	};
 #endif
+#endif
 
-#define NR_ITERATIONS 1000
-#define INIT_FRAMES 3000
-//#define DETAIL_DEBUG
+//#define NR_ITERATIONS 10000
+#define NR_ITERATIONS 1
+#define INIT_FRAMES 2000
+#define START_CULL  7000
+#define DETAIL_DEBUG
+
+#ifdef DETAIL_DEBUG
+#undef NR_ITERATIONS
+#define NR_ITERATIONS 1
+#endif
 
 static const double syncoff = 0.01; //The factor by which to correct off-sync-ness
 static const double syncslew = 0.00000005; //The factor by which to correct slew offsets
@@ -76,11 +92,11 @@ class Node
 public:
 
 	Node() : myMac(""), is_known(false), x(0), y(0), z(0), nodeid(-1), currentpid(-1), VirtualTimeOffset(0), got_time(0), last_time(0), running_time(0) {
-		memset( GotPeerTime, 0, sizeof( GotPeerTime ) ); memset( PeerTime, 0, sizeof( PeerTime ) ); memset( othernodedeltas, 0, sizeof( othernodedeltas ) ); memset( othernodedeltascount, 0, sizeof(othernodedeltascount) );
+		memset( GotPeerTime, 0, sizeof( GotPeerTime ) ); memset( PeerTime, 0, sizeof( PeerTime ) ); memset( othernodedeltas, 0, sizeof( othernodedeltas ) ); memset( othernodedeltascount, 0, sizeof(othernodedeltascount) ); memset( LastDelta, 0, sizeof( LastDelta ) );
 	}
 
 	Node( string mac, int ik, double tx, double ty, double tz, int nid ) : myMac( mac ), is_known(ik), x(tx), y(ty), z(tz), nodeid(nid), VirtualTimeOffset(0), got_time(0), last_time(0), running_time(0) {
-		memset( GotPeerTime, 0, sizeof( GotPeerTime ) ); memset( PeerTime, 0, sizeof( PeerTime ) ); memset( othernodedeltas, 0, sizeof( othernodedeltas ) ); memset( othernodedeltascount, 0, sizeof(othernodedeltascount) );
+		memset( GotPeerTime, 0, sizeof( GotPeerTime ) ); memset( PeerTime, 0, sizeof( PeerTime ) ); memset( othernodedeltas, 0, sizeof( othernodedeltas ) ); memset( othernodedeltascount, 0, sizeof(othernodedeltascount) ); memset( LastDelta, 0, sizeof( LastDelta ) );
 	}
 
 	string myMac;
@@ -121,10 +137,9 @@ public:
 				if( GotPeerTime[i] )
 				{
 					double delta = PeerTime[nodeto] - PeerTime[i];
-					LastDelta[i] = delta;
-					NODES[i]->LastDelta[nodeto] = delta;
-					NODES[nodeto]->LastDelta[i] = delta;
+					//LastDelta[i] = delta;
 
+					//printf( "%f - %f = %f\n", PeerTime[nodeto], PeerTime[i], delta );
 					if( still_init )
 					{
 						if( delta < -100000 ) delta = -100000;
@@ -132,9 +147,29 @@ public:
 					}
 					else
 					{
-						if( delta < -20 ) delta = -20;
-						if( delta > 20 ) delta = 20;
+						//fprintf( stderr, "%f", delta );
+
+						
+						//If the delta is unacceptable (60 seems good) that means we got a wrong timestamp.  Throw it out.
+						if( gFrame > START_CULL )
+						{
+							if( delta < -20 ) continue; //delta = -20;
+							if( delta > 20 ) continue; //delta = 20;
+							//fprintf( stderr, "\n", delta );
+							NODES[i]->LastDelta[nodeto] = delta;
+							NODES[nodeto]->LastDelta[i] = -delta;
+						}
 					}
+
+					if( gFrame > START_CULL )
+					{
+						othernodedeltas[nodeto] += delta;
+						othernodedeltascount[nodeto]++;
+						othernodedeltas[i] += -delta;
+						othernodedeltascount[i]++;
+						//printf( "%d / %d / %d\n", nodeid, othernode, othernodedeltascount[othernode] );
+					}
+
 
 					if( NODES[nodeto]->is_known )
 					{
@@ -142,7 +177,7 @@ public:
 					}
 					if( NODES[i]->is_known )
 					{
-						NODES[nodeto]->UpdateVirtualTime(-delta, i );
+						NODES[nodeto]->UpdateVirtualTime( -delta, i );
 					}
 				}
 			}
@@ -152,7 +187,7 @@ public:
 			{
 				for( i = 0; i < NRNODES; i++ )
 				{
-					printf( "%f, %f, %f, %f, %f, %f, ", NODES[i]->VirtualTimeOffset, (NODES[i]->clockskewratio-1.0)*1000000, NODES[i]->LastDelta[0], NODES[i]->LastDelta[1], NODES[i]->LastDelta[2], NODES[i]->LastDelta[3] );
+					printf( "%f, %f, %f, %f, %f, %f, %f, ", NODES[i]->VirtualTimeOffset, (NODES[i]->clockskewratio-1.0)*1000000, NODES[i]->LastDelta[0], NODES[i]->LastDelta[1], NODES[i]->LastDelta[2], NODES[i]->LastDelta[3], NODES[i]->LastDelta[4] );
 	//				printf( "%f ", NODES[i]->VirtualTimeOffset );
 				}
 				printf( "%d\n", still_init );
@@ -163,13 +198,6 @@ public:
 
 	void UpdateVirtualTime( double delta, int othernode )
 	{
-		if( !still_init )
-		{
-			othernodedeltas[othernode] += delta*delta;
-			othernodedeltascount[othernode]++;
-			//printf( "%d / %d / %d\n", nodeid, othernode, othernodedeltascount[othernode] );
-		}
-
 		if( still_init )
 			delta = delta * syncoff_before;
 		else
@@ -207,21 +235,21 @@ public:
 		}
 
 		GotPeerTime[nodeto] = 1;
-		PeerTime[nodeto] = RealTime - GetToF( *NODES[nodeto] );
+		PeerTime[nodeto] = (RealTime - GetToF( *NODES[nodeto] ));
 		SyncTimes( nodeto );
 	}
 
 	double GetToF( Node & other )										///TOF TOF TOF
 	{
-/*		if ( !is_known || !other.is_known ) return 0;
-		if( nodeid == 0 && other.nodeid == 1 ) return 1;
+		if ( !is_known || !other.is_known ) return 0;
+		//return ToFMatrix[nodeid][other.nodeid]*1.0;
 		double dx = x - other.x;
 		double dy = y - other.y;
 		double dz = z - other.z;
 		double dist = sqrtf( dx*dx+dy*dy+dz*dz );
 		double dt = dist / SoL * (MHz * 1000000); 
-		return dt;*/
-		return ToFMatrix[nodeid][other.nodeid];
+		return dt;
+
 	}
 
 	double RxTimeToReal( uint32_t rxtime )  //In ticks.
@@ -255,6 +283,7 @@ void ProcessEntries()
 
 		if( e.time == 0 ) continue;
 
+		gFrame = i;
 		still_init = i < INIT_FRAMES; //If still init, update clocks very quickly.
 		int nfrom = GetNodeId( e.macFrom );
 		int nto = GetNodeId( e.macTo );
@@ -327,47 +356,77 @@ int main( int argc, char ** argv )
 	LoadEntries( argv[1] );
 
 
-	double BackupToFMatrix[4][4];
+	double BackupToFMatrix[5][5];
 	double backupError = 1e20;
 	double anneal = 1.0;
 		memcpy(BackupToFMatrix, ToFMatrix, sizeof( ToFMatrix ) );
 
-	srand(3);
+	srand(5);
 	int k;
 	for (k = 0; k < NR_ITERATIONS; k++)
 	{
-		memcpy( ToFMatrix, BackupToFMatrix, sizeof( ToFMatrix ) );
-		int xcellmod = rand()%4;
-		int ycellmod = rand()%3;
-		if( ycellmod >= xcellmod ) ycellmod++;
-		//ToFMatrix[xcellmod][ycellmod] += (rand()%10000-5000)/5000.0*anneal;
-		ToFMatrix[xcellmod][ycellmod] += (rand()%10000-5000)/5000.0*anneal;
 
+		if( NR_ITERATIONS > 1 )
+		{
+			memcpy( ToFMatrix, BackupToFMatrix, sizeof( ToFMatrix ) );
+			int xcellmod = rand()%(NRNODES);
+			int ycellmod = rand()%(NRNODES-1);
+			if( ycellmod >= xcellmod ) ycellmod++;
+			//ToFMatrix[xcellmod][ycellmod] += (rand()%10000-5000)/5000.0*anneal;
+			double emt = (rand()%10000-5000)/5000.0*anneal;
+			ToFMatrix[xcellmod][ycellmod] += emt;
+			ToFMatrix[ycellmod][xcellmod] += emt;
 
-		anneal *= 0.9998;
+			xcellmod = rand()%NRNODES;
+			ycellmod = rand()%(NRNODES-1);
+			if( ycellmod >= xcellmod ) ycellmod++;
+			emt = (rand()%10000-5000)/5000.0*anneal;
+			//ToFMatrix[xcellmod][ycellmod] += (rand()%10000-5000)/5000.0*anneal;
+			ToFMatrix[xcellmod][ycellmod] += emt;
+			ToFMatrix[ycellmod][xcellmod] += emt;
+		}
+
+		anneal *= 0.9995;
 		//ToFMatrix[ycellmod][xcellmod] += (rand()%10000)/10000.0;
 
-		if( NODES[0] ) delete NODES[0];
-		if( NODES[1] ) delete NODES[1];
-		if( NODES[2] ) delete NODES[2];
-		if( NODES[3] ) delete NODES[3];
+		int i;
+		for( i = 0; i < NRNODES; i++ )
+			if( NODES[i] ) delete NODES[i];
 
-		double DistanceMeters162 = 4.1148;
-		double DistanceMeters168 = 4.2672;
+		double DistanceMeters162 = -4.1148*1.0;
+		double DistanceMeters168 = 4.2672*1.0;
 
 	#define DO_SPACING
 
+/*
 	#ifdef DO_SPACING
-		NODES[0] = new Node( "5ccf7fc0c75c", 1, 0, 0, 0, 0);  //.147
-		NODES[1] = new Node( "5ccf7fc0d218", 1, DistanceMeters168, 0, 0, 1 );  //.179
-		NODES[2] = new Node( "5ccf7fc10b08", 1, 0, DistanceMeters162, 0, 2 );  //.169
-		NODES[3] = new Node( "5ccf7fc06055", KNOWN_NODE_3, DistanceMeters168, DistanceMeters162, 0, 3 );  //.241
+		NODES[0] = new Node( "5ccf7fc0c75c", 1, 			0, 0, 0, 0);  //.147
+		NODES[1] = new Node( "5ccf7fc0d218", 1, 			DistanceMeters168, DistanceMeters162, 0, 1 );  //.179
+		NODES[2] = new Node( "5ccf7fc10b08", 1,				0, DistanceMeters162, 0, 2 );  //.169(167)
+		NODES[3] = new Node( "5ccf7fc06055", KNOWN_NODE_3, 	DistanceMeters168, 0, 0, 3 );  //.241
+	#if NRNODES>4
+		NODES[4] = new Node( "5ccf7fc10aff", 1, DistanceMeters168/2, DistanceMeters162/2, 0, 3 );  //.214
+	#endif
+
 	#else
 		NODES[0] = new Node( "5ccf7fc0c75c", 1, 0, 0, 0, 0);  //.147
 		NODES[1] = new Node( "5ccf7fc0d218", 1, 0, 0, 0, 1 );  //.179
 		NODES[2] = new Node( "5ccf7fc10b08", 1, 0, 0, 0, 2 );  //.169
 		NODES[3] = new Node( "5ccf7fc06055", 1, 0, 0, 0, 3 );  //.241
+	#if NRNODES>4
+		NODES[4] = new Node( "5ccf7fc10aff", 0, 0, 0, 0, 3 );  //.214
 	#endif
+
+	#endif
+*/
+
+
+
+		NODES[0] = new Node( "5ccf7fc0d218", 1, 			1*4.7244, 0, 0, 1 );  //.179
+		NODES[1] = new Node( "5ccf7fc0c75c", 1, 			0, 0, 0, 0);  //.147
+		NODES[2] = new Node( "5ccf7fc10b08", 1,				100*-4.7244, 0, 0, 2 );  //.169(167)
+
+
 
 		/*
 			147 -- 168 in -- 179
@@ -376,7 +435,7 @@ int main( int argc, char ** argv )
 			162 in
 			 |
 			 |
-			169 ------------ 241
+			167 ------------ 241
 		*/
 
 
