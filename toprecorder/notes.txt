@@ -29,7 +29,7 @@ IP ADDRESS      STATUS WORD     XMIT MAC     RX MAC    CODE    PID    CCLOCK at 
 192.168.11.241 2b1c32400000 5ccf7fc0c75c 5ccf7fc06055 ESPEED 106097 3759192468
 192.168.11.147 2c1c32400000 5ccf7fc06055 5ccf7fc0c75c ESPEED 105571 2852887099
 
-CODE is always "ESPEED"
+CODE is always "ESPEED" or "ESPTXX" if transmitter.  Note transmitter is not necessarily actual transmit time.
 
 
 Status word is as follows:
@@ -50,4 +50,24 @@ Status word is as follows:
 	unsigned Not_Sounding:1;
 	unsigned:1;
 
+
+            214
+            10'
+            ===
+241 ------- 25' -------- 147
+--
+25'
+--
+179 -------- 25'         169
+
+
+
+Data10:
+Data11: both data10 and 11 are on my front lawn, use Brendan's device configuration map.  Now including transmit time. (54G)
+Data12: Everything same, except now 802.11G/6
+Data13: Everything same, except now 802.11B/11
+Data14: Everything same, except now 802.11N/13MBit/s
+Data15: Everything same, except now 802.11N/65Mbit/s
+Data16: Everything same, except now 802.11N/72.2Mbit/s
+Data17: Everything same, except now 802.11B/5.5
 

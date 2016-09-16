@@ -1,7 +1,7 @@
 #define USER_OVERRIDE
 //#define NMI_OVERRIDE
 
-#define USE_wDevTime //CCOUNT IS TRASH!!! USE THIS
+//#define USE_wDevTime //Only gives you to the us.
 
 
 #ifdef USER_OVERRIDE
@@ -9,6 +9,14 @@
 
 .align 4
 
+
+
+.global packet_tx_time
+
+//_addy_of_packet_tx_matchmask:
+//	.long packet_tx_matchmask
+_addy_of_packet_tx_time:
+	.long packet_tx_time
 _lendmark:
 	.long debugccount
 _gpiomark_out:
@@ -47,7 +55,7 @@ PreEmpt_USER_Vector:
 	and a3, a2, a3
 	beqz a3, _skip_er
 #else	
-	bbci a3, 8, _skip_er
+	bbci a3, 8, _skip_er_maybe_trigger_tx
 #endif
 
 
@@ -61,7 +69,7 @@ PreEmpt_USER_Vector:
 	movi a2, 0x3ff2001c
 	l32i a2, a2, 0 //Get pointer to memory structre
 	l32i a2, a2, 4 //Second word in structure
-	l32i a3, a2, (12+24) //12 is beginning of packet.
+	l32i a3, a2, (12+24) //12 is beginning of packet.  We're loking 24 bytes in.
 
 	movi a4, 0x66826682
 	bne  a4, a3, _skip_er
@@ -85,6 +93,31 @@ PreEmpt_USER_Vector:
 	l32r a2, _gpiomark_out
 	s32i a0, a2, 0
 	s32i a0, a2, 4
+	j _skip_er
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////Get precise time of tx packets
+
+_skip_er_maybe_trigger_tx:
+
+	//      vvv  Change this number!!!
+	//bbci a3, 7, _skip_er	 //XXX XXX TODO HERE NEED RX interrupt notice.
+	//Notes:
+	// 0x00040000 = Kind of TX?  Not perfect, tho.  (Bit 18)
+	// 0x00080000 = Kind of TX?  Seems worse than 0x00040000... Acks too?
+
+/*
+	l32r a2, _addy_of_packet_tx_matchmask
+	l32i a2, a2, 0
+	and a2, a2, a3
+	beqz a2, _skip_er
+*/
+	bbci a3, 18, _skip_er
+
+	l32r a2, _addy_of_packet_tx_time
+	l32i a3, a2, 0
+	bnez a3, _skip_er
+	s32i a0, a2, 0
 
 _skip_er:
 

@@ -110,8 +110,6 @@ function GotMEM(req,data)
 }
 
 
-
-
 $(document).ready(function () {
 	var dasent = "<TABLE WIDTH=100><TR><TH>address</TH><TH>None</TH><TH>Input</TH><TH>Watch</TH><TH>Output</TH><TH>Value</TH><TH>Submit</TH></TR>";
 	for( var i = 0; i < mements; i++ )

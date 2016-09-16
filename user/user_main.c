@@ -52,6 +52,9 @@ volatile uint32_t debugccount2;
 volatile uint32_t debugccount3;
 volatile uint32_t debugcontrol;
 
+volatile uint32_t packet_tx_time;
+volatile uint32_t packet_tx_matchmask = 0x10000;
+
 void udpserver_recv(void *arg, char *pusrdata, unsigned short len)
 {
 	struct espconn *pespconn = (struct espconn *)arg;
@@ -138,6 +141,43 @@ static void ClearOutBuffers()
 	espconn_sent(pUdpServer, sendbuffer, bpl-sendbuffer );
 }
 
+int txpakid;
+
+void sent_freedom_cb(uint8 status)
+{
+/*
+	int b = 0;
+	for( b = 0; b < MAX_BUFFERS; b++ )
+	{
+		if( bufferinuse[b] == 0 ) break;
+	}
+	if( b == MAX_BUFFERS ) return;
+*/
+	if( !packet_tx_time )
+	{
+		return;
+	}
+	int b = MAX_BUFFERS-1;
+	bufferinuse[b] = 1;
+
+	uint8_t * buffout = buffers[b];
+	ets_memcpy( buffout, "\x00\x00\x00\x00\x00\x00", 6 ); //Header
+	ets_memcpy( buffout + 6, mypacket+10, 6 ); //MAC From (us)
+	ets_memcpy( buffout + 12, mypacket+10, 6 ); //My MAC (us)
+	ets_memcpy( buffout + 18, "ESPTXX", 6 ); //ESPTXX
+
+	buffout[24] = txpakid>>24;
+	buffout[25] = txpakid>>16;
+	buffout[26] = txpakid>>8;
+	buffout[27] = txpakid>>0;
+
+	buffout[28] = packet_tx_time>>0;
+	buffout[29] = packet_tx_time>>8;
+	buffout[30] = packet_tx_time>>16;
+	buffout[31] = packet_tx_time>>24;
+	packet_tx_time = 0;
+}
+
 
 //Timer event.
 extern uint8_t printed_ip;
@@ -150,69 +190,75 @@ static void ICACHE_FLASH_ATTR myTimer(void *arg)
 	static int waittik;
 	thistik++;
 
-
 	CSTick( 0 );
 
+//	wifi_set_user_fixed_rate( 3, 0x0b );  //0xb = 6Mbit G
+//	wifi_set_user_fixed_rate( 3, 0x0c );  //0xc = 54Mbit G
+//	wifi_set_user_fixed_rate( 3, 0x07 );  //0x7 = 11Mbit ... B?
 
-	wifi_set_user_fixed_rate( 3, 12 );
+	//0x02 = 5.5Mbit/s (B)
+	//0x01 = 2Mbit/s (B)
+	//0x00 = 1Mbit/s (B)
+	//0x10 = 6.5MBit
+	//0x11 = 13MBit
+	//0x1f = 72.2Mbit/s
+//	wifi_set_phy_mode(PHY_MODE_11N);
+	wifi_set_phy_mode(PHY_MODE_11G); //??? Maybe - I haven't been doing this...
 
-	if( thistik < waittik )
+	wifi_set_user_fixed_rate( 3, 0x0c );
+
+//	wifi_set_user_limit_rate_mask( 3 );
+//	wifi_set_user_rate_limit( FIXED_RATE_MASK_ALL, 0, 1, 1 );
+
+	if( thistik == waittik-3 )
 	{
-		return;
-	}
+		int i;
+		static int did_init = 0;
 
-	ClearOutBuffers();
+		if( !did_init && printed_ip )
+		{
+			//For sending raw packets.
+			//SetupRawsend();
+			wifi_set_raw_recv_cb( rx_func );
 
-	thistik = 0;
-	waittik = rand()%10 + 40;
+			wifi_register_send_pkt_freedom_cb( sent_freedom_cb );
 
-	int i;
-	static int did_init = 0;
+			did_init = 1;
 
-	CSTick( 1 );
+			//Setup our send packet with our MAC address.
+			wifi_get_macaddr(STATION_IF, mypacket + 10);
+			debugccount = 0;
 
-	if( !did_init && printed_ip )
-	{
-		//For sending raw packets.
-		//SetupRawsend();
-		wifi_set_raw_recv_cb( rx_func );
-		did_init = 1;
-
-		//Setup our send packet with our MAC address.
-		wifi_get_macaddr(STATION_IF, mypacket + 10);
-		debugccount = 0;
+			//printf( "!!!\n" );
+		}
 
 
-		//printf( "!!!\n" );
-	}
-
-
-	if( did_init )
-	{
-		static int id;
 		//printf( "%d\n", debugccount );
 		//uart0_sendStr("k");
 		ets_strcpy( mypacket+30, "ESPEED" );
-		id++;
-		mypacket[36] = id>>24;
-		mypacket[37] = id>>16;
-		mypacket[38] = id>>8;
-		mypacket[39] = id>>0;
+		txpakid++;
+		mypacket[36] = txpakid>>24;
+		mypacket[37] = txpakid>>16;
+		mypacket[38] = txpakid>>8;
+		mypacket[39] = txpakid>>0;
 		mypacket[40] = 0;
 		mypacket[41] = 0;
 		mypacket[42] = 0;
 		mypacket[43] = 0;
-		
-		wifi_send_pkt_freedom( mypacket, 30 + 16, true) ;  //Currently only seems to send at 1MBit/s.  Need to figure out how to bump that up.
-
-/*
-	//Not doing this (yet)
-		ets_intr_lock();
-		RawSendBuffer( mypacket, 20 );
-		ets_intr_unlock();
-*/
+	
+		packet_tx_time = 0;
+		wifi_send_pkt_freedom( mypacket, 30 + 16, true) ;  
+		//Looks like we can actually set the speed --> wifi_set_user_fixed_rate( 3, 12 );
 	}
+	else if( thistik >= waittik ) //Happens 3ms later.
+	{
+		ClearOutBuffers();
 
+		CSTick( 1 );
+
+		thistik = 0;
+		waittik = rand()%10 + 40;
+	}
 }
 
 void ICACHE_FLASH_ATTR charrx( uint8_t c ) {/*Called from UART.*/}
@@ -273,7 +319,7 @@ void user_init(void)
 	pUdpServer->proto.udp->remote_port = 9999;
 	pUdpServer->proto.udp->remote_ip[0] = 192;
 	pUdpServer->proto.udp->remote_ip[1] = 168;
-	pUdpServer->proto.udp->remote_ip[2] = 11;
+	pUdpServer->proto.udp->remote_ip[2] = 1;
 	pUdpServer->proto.udp->remote_ip[3] = 113;
 	espconn_regist_recvcb(pUdpServer, udpserver_recv);
 	if( espconn_create( pUdpServer ) )
@@ -291,7 +337,7 @@ void user_init(void)
 	//Timer example
 	os_timer_disarm(&some_timer);
 	os_timer_setfn(&some_timer, (os_timer_func_t *)myTimer, NULL);
-	os_timer_arm(&some_timer, 1, 1); //The underlying API expects this to average out to 50ms.
+	os_timer_arm(&some_timer, 1, 1); //The underlying API expects it's slow ticks to average out to 50ms.
  
 	//system_os_post(procTaskPrio, 0, 0 );
 
