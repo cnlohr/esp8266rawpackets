@@ -5,10 +5,12 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include <map>
+
 
 using namespace std;
 
-#define NRNODES 3
+#define NRNODES 5
 
 struct DataEntry
 {
@@ -80,8 +82,9 @@ double ToFMatrix[5][5] = {
 #define NR_ITERATIONS 1
 #endif
 
-static const double syncoff = 0.01; //The factor by which to correct off-sync-ness
-static const double syncslew = 0.00000005; //The factor by which to correct slew offsets
+static const double syncoff = 0.001; //The factor by which to correct off-sync-ness
+static const double syncslew = 0.0000002; //The factor by which to correct slew offsets
+static const double syncslewD = 0.00001;
 
 static const double syncoff_before = 0.1; //The factor by which to correct off-sync-ness
 static const double syncslew_before = 0.0000001; //The factor by which to correct slew offsets
@@ -91,11 +94,11 @@ class Node
 {
 public:
 
-	Node() : myMac(""), is_known(false), x(0), y(0), z(0), nodeid(-1), currentpid(-1), VirtualTimeOffset(0), got_time(0), last_time(0), running_time(0) {
+	Node() : myMac(""), is_known(false), x(0), y(0), z(0), nodeid(-1), currentpid(-1), VirtualTimeOffset(0), DeltaTFilt(0), LastDeltaTFilt(0), got_time(0), last_time(0), running_time(0) {
 		memset( GotPeerTime, 0, sizeof( GotPeerTime ) ); memset( PeerTime, 0, sizeof( PeerTime ) ); memset( othernodedeltas, 0, sizeof( othernodedeltas ) ); memset( othernodedeltascount, 0, sizeof(othernodedeltascount) ); memset( LastDelta, 0, sizeof( LastDelta ) );
 	}
 
-	Node( string mac, int ik, double tx, double ty, double tz, int nid ) : myMac( mac ), is_known(ik), x(tx), y(ty), z(tz), nodeid(nid), VirtualTimeOffset(0), got_time(0), last_time(0), running_time(0) {
+	Node( string mac, int ik, double tx, double ty, double tz, int nid ) : myMac( mac ), is_known(ik), x(tx), y(ty), z(tz), nodeid(nid), VirtualTimeOffset(0), DeltaTFilt(0), LastDeltaTFilt(0), got_time(0), last_time(0), running_time(0) {
 		memset( GotPeerTime, 0, sizeof( GotPeerTime ) ); memset( PeerTime, 0, sizeof( PeerTime ) ); memset( othernodedeltas, 0, sizeof( othernodedeltas ) ); memset( othernodedeltascount, 0, sizeof(othernodedeltascount) ); memset( LastDelta, 0, sizeof( LastDelta ) );
 	}
 
@@ -114,6 +117,8 @@ public:
 
 	//Tricky: This is the time sync values (will be set by sender on receiver)
 	double VirtualTimeOffset;
+	double DeltaTFilt;
+	double LastDeltaTFilt;
 
 	//These three are just for parsing times, nothing tricky.
 	double running_time;
@@ -151,14 +156,23 @@ public:
 
 						
 						//If the delta is unacceptable (60 seems good) that means we got a wrong timestamp.  Throw it out.
-						if( gFrame > START_CULL )
+						if( gFrame > START_CULL*2 )
 						{
-							if( delta < -20 ) continue; //delta = -20;
-							if( delta > 20 ) continue; //delta = 20;
+							if( delta < -8 ) continue; //delta = -20;
+							if( delta > 8 ) continue; //delta = 20;
+							NODES[i]->LastDelta[nodeto] = delta;
+							NODES[nodeto]->LastDelta[i] = -delta;
+						}
+						else if( gFrame > START_CULL )
+						{
+							if( delta < -50 ) continue; //delta = -20;
+							if( delta > 50 ) continue; //delta = 20;
 							//fprintf( stderr, "\n", delta );
 							NODES[i]->LastDelta[nodeto] = delta;
 							NODES[nodeto]->LastDelta[i] = -delta;
 						}
+
+
 					}
 
 					if( gFrame > START_CULL )
@@ -211,6 +225,12 @@ public:
 		if( clockskewoff <-tsync ) clockskewoff =-tsync;
 		clockskewratio += clockskewoff;
 		VirtualTimeOffset += delta;
+
+		DeltaTFilt = DeltaTFilt * .99 + delta * .1;
+
+		clockskewratio += syncslewD * -(LastDeltaTFilt-DeltaTFilt);
+		
+		LastDeltaTFilt = DeltaTFilt;
 	}
 
 	void ResetPeerTimes()
@@ -419,12 +439,26 @@ int main( int argc, char ** argv )
 
 	#endif
 */
+/*
+
+            214
+            10'
+            ===
+241 ------- 25' -------- 147
+--
+25'
+--
+179 -------- 25'         169
+*/
+		double m25 = 7.62/10;
+		double m10 = 3.048/10;
 
 
-
-		NODES[0] = new Node( "5ccf7fc0d218", 1, 			1*4.7244, 0, 0, 1 );  //.179
-		NODES[1] = new Node( "5ccf7fc0c75c", 1, 			0, 0, 0, 0);  //.147
-		NODES[2] = new Node( "5ccf7fc10b08", 1,				100*-4.7244, 0, 0, 2 );  //.169(167)
+		NODES[0] = new Node( "5ccf7fc0c75c", 1, m25, 0, 0, 0 );  //.147
+		NODES[1] = new Node( "5ccf7fc0d218", 1, 0, m25, 0, 1 );  //.179
+		NODES[2] = new Node( "5ccf7fc10b08", 1, m25, m25, 0, 2 );  //.169
+		NODES[3] = new Node( "5ccf7fc06055", 1, 0, 0, 0, 3 );  //.241
+		NODES[4] = new Node( "5ccf7fc10aff", 1, m25/2, -m10, 0, 3 );  //.214(213)
 
 
 
@@ -518,7 +552,8 @@ void LoadEntries( const char * filename )
 
 		if( strcmp( code, "ESPEED" ) != 0 )
 		{
-			fprintf( stderr, "Error: unmatching code on line %d\n", lineno );
+			//fprintf( stderr, "Error: unmatching code on line %d\n", lineno );
+			continue;
 		}
 		DataEntry e;
 		e.IP = ip;
@@ -533,5 +568,14 @@ void LoadEntries( const char * filename )
 	fclose( f );
 }
 
-int GetNodeId( string mac ) { int i; for( i = 0; i < NRNODES; i++ ) if( mac == NODES[i]->myMac ) return i; fprintf( stderr, "Error: can't find node %s\n", mac.c_str() ); return -1; }
+int GetNodeId( string mac ) {
+	int i; for( i = 0; i < NRNODES; i++ ) if( mac == NODES[i]->myMac ) return i;
+	static map< string, int > showns;
+	if( showns[mac.c_str()] == 0 )
+	{
+		fprintf( stderr, "Error: can't find node %s\n", mac.c_str() );
+		showns[mac.c_str()] = 1;
+	}
+	return -1;
+}
 
