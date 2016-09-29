@@ -17,7 +17,7 @@ We can now run a host at 192.168.1.113.  This host can bind to UDP port 9999 and
 
 An enterprising young soul, should they choose could probably process the data in real time, if they so chose.
 
-## 3D Localization
+## 2D/3D Localization
 
 This is where things get tricky.  Unlike GPS where we know the time of sending a packet, we can only really trust the time of packet reception.  Additionally, we don't know anything about the times on the sending nodes.  The only thing we can do is know the time a node sent a packet on a receiver's local oscillator time - we can determine the send time on the initial constellation by subtracting out the distance from one node to another.
 
@@ -27,6 +27,8 @@ If we wanted to find the location of a node within the constelaltion that we did
 
 There is a jitter of +/-4 clock ticks, so it would take many, many readings to get a good solid reading on what the true differential value would be.
 
+It's important to note that in our example, all of the nodes are co-planar, so only 2D localization would be possible anyway.  I recommend trying to resolve the location of node #5 to the constellation of 1-4 if you want to try to find something.
+
 ## Why it's hard.
 
 So, this is a hard question to answer.  I think the biggest problem I have with my data is that I'm not very good at analyzing these sorts of things.  Additionally, I think I'm fighting clock jitter.  Though all crystals have natural speed differences which can be observed, easily in the +/- 5-10ppm range, the crystals also seem to have a random walk which makes it very, very hard to nail down times.  Also, figuring out time synchronization from the differential systems is... hard :( - mathematically.
@@ -35,3 +37,6 @@ I've tried doing this a number of times, and I've checked my math by changing th
 
 Maybe if I had some 26MHz signal going to all the ESPs to keep the clocks in sync???
 
+This data is outside and ideal.  Multipath could mess things up!
+
+Also, maybe you could use rssi to help resolve?
