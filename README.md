@@ -35,8 +35,6 @@ So, this is a hard question to answer.  I think the biggest problem I have with 
 
 I've tried doing this a number of times, and I've checked my math by changing the "distance" between nodes to make sure the distances of the true constellation should match that of the data --- and often, they don't :(.
 
-Maybe if I had some 26MHz signal going to all the ESPs to keep the clocks in sync???
-
-This data is outside and ideal.  Multipath could mess things up!
+This data is outside and ideal.  Multipath could mess things up!  Def need too look at all the encoding schemes.  Extra packets might be messing with the timing.  Could consider sending data back via serial or Ethernet?
 
 Also, maybe you could use rssi to help resolve?
