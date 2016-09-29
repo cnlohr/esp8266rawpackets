@@ -95,6 +95,8 @@ int  CanRawsend()
 	return pxpkt!=0;
 }
 
+//I don't use this anymore, so really no need to do it.
+//I strongly recommend using esp freedom if possible.
 void RawSendBuffer( uint8_t * buffer, int length )
 {
 	if( !pxpkt )
