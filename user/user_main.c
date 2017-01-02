@@ -153,6 +153,7 @@ void sent_freedom_cb(uint8 status)
 	}
 	if( b == MAX_BUFFERS ) return;
 */
+debugccount3++;
 	if( !packet_tx_time )
 	{
 		return;
@@ -191,7 +192,7 @@ static void ICACHE_FLASH_ATTR myTimer(void *arg)
 	thistik++;
 
 	CSTick( 0 );
-
+printf( "!!%d\n", debugccount3 );
 //	wifi_set_user_fixed_rate( 3, 0x0b );  //0xb = 6Mbit G
 //	wifi_set_user_fixed_rate( 3, 0x0c );  //0xc = 54Mbit G
 //	wifi_set_user_fixed_rate( 3, 0x07 );  //0x7 = 11Mbit ... B?
@@ -203,9 +204,14 @@ static void ICACHE_FLASH_ATTR myTimer(void *arg)
 	//0x11 = 13MBit
 	//0x1f = 72.2Mbit/s
 //	wifi_set_phy_mode(PHY_MODE_11N);
-	wifi_set_phy_mode(PHY_MODE_11G); //??? Maybe - I haven't been doing this...
 
-	wifi_set_user_fixed_rate( 3, 0x0c );
+	//54 mbit
+//	wifi_set_phy_mode(PHY_MODE_11G); //??? Maybe - I haven't been doing this...
+//	wifi_set_user_fixed_rate( 3, 0x0c );
+
+
+	wifi_set_phy_mode(PHY_MODE_11N); //??? Maybe - I haven't been doing this...
+	wifi_set_user_fixed_rate( 3, 0x1f );
 
 //	wifi_set_user_limit_rate_mask( 3 );
 //	wifi_set_user_rate_limit( FIXED_RATE_MASK_ALL, 0, 1, 1 );
