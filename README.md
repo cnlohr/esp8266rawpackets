@@ -1,5 +1,7 @@
 #Demonstration of raw packet sending on the ESP8266 for the purpose of triangulation.
 
+NOW 2.0.0 COMPATIBLE.  see https://github.com/cnlohr/esp8266rawpackets/issues/7
+
 ## Introduction
 This project is geared for the end attempt at triangulation (Which it can't do currently) but, I have run into some useful things along the way.  Right now, this allows us to connect to an AP at the same time as send/receive arbitrary packets as well as get timestamps on both the sending and receiving.
 
