@@ -153,7 +153,7 @@ void sent_freedom_cb(uint8 status)
 	}
 	if( b == MAX_BUFFERS ) return;
 */
-debugccount3++;
+debugccount2++;
 	if( !packet_tx_time )
 	{
 		return;
